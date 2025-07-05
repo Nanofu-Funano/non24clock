@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #111;
+      color: #fff;
+      padding: 2em;
+    }
+    .time {
+      font-size: 4em;
+      margin: 0.5em 0;
+    }
+    .controls {
+      margin-top: 2em;
+    }
+    input {
+      font-size: 1em;
+      padding: 0.3em;
+      width: 6em;
+    }
+    .progress-container {
+      margin-top: 1em;
+      width: 80%;
+      height: 10px;
+      background: #444;
+      margin-left: auto;
+      margin-right: auto;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #0cf;
+      transition: width 0.2s linear;
+    }
+  </style>
+</head>
+<body>
+  <div class="time" id="virtualTime">--:--:--</div>
+  <div class="progress-container">
+    <div class="progress-bar" id="cycleProgress" style="width: 0%;"></div>
+  </div>
+
+  <div class="controls">
+    <div>
+      <label>Drift per day (min): <input type="number" id="driftPerDay"></label>
+    </div>
+    <div style="margin-top: 1em;">
+      <label>Correction time (HH:MM): <input type="time" id="correctionTime"></label>
+      <button onclick="applyCorrection()">Apply</button>
+    </div>
+    <div style="margin-top: 1em;">
+      <label>Notify at (HH:MM): <input type="time" id="notifyTime"></label>
+      <button onclick="requestNotificationPermission()">Enable Notifications</button>
+    </div>
+  </div>
+
+  <script>
+    const baseStart = new Date("2025-06-01T00:00:00+09:00").getTime();
+    let correctionOffsetMs = parseFloat(localStorage.getItem("correctionOffsetMs")) || 0;
+    document.getElementById("driftPerDay").value = localStorage.getItem("driftPerDay") || 30;
+    document.getElementById("notifyTime").value = localStorage.getItem("notifyTime") || "";
+
+    let lastNotifiedMinute = null; // 通知済み記録
+
+    function updateTime() {
+      const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
+      const now = Date.now();
+      const elapsedMs = now - baseStart;
+      const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+      const driftMs = elapsedDays * driftPerDay * 60 * 1000;
+
+      const virtualMs = baseStart + elapsedMs + driftMs + correctionOffsetMs;
+      const virtualDate = new Date(virtualMs);
+
+      const h = virtualDate.getHours().toString().padStart(2, '0');
+      const m = virtualDate.getMinutes().toString().padStart(2, '0');
+      const s = virtualDate.getSeconds().toString().padStart(2, '0');
+
+      document.getElementById("virtualTime").textContent = `${h}:${m}:${s}`;
+
+      // update cycle progress bar
+      const cycleLengthMin = 1440 + driftPerDay;
+      const minutesIntoDay = virtualDate.getHours() * 60 + virtualDate.getMinutes() + virtualDate.getSeconds() / 60;
+      const cyclePercent = Math.min(100, (minutesIntoDay / cycleLengthMin) * 100);
+      document.getElementById("cycleProgress").style.width = `${cyclePercent}%`;
+
+      // check for notification
+      const notifyStr = document.getElementById("notifyTime").value;
+      if (notifyStr) {
+        const [nh, nm] = notifyStr.split(":" ).map(Number);
+        const currentMinute = virtualDate.getHours() * 60 + virtualDate.getMinutes();
+        const targetMinute = nh * 60 + nm;
+
+        if (currentMinute === targetMinute && lastNotifiedMinute !== currentMinute) {
+          sendNotification(`Virtual time is now ${h}:${m}`);
+          lastNotifiedMinute = currentMinute;
+        }
+        if (currentMinute !== targetMinute) {
+          lastNotifiedMinute = null; // リセット
+        }
+      }
+    }
+
+    function applyCorrection() {
+      const timeStr = document.getElementById("correctionTime").value;
+      if (!timeStr) return;
+      const [h, m] = timeStr.split(":" ).map(Number);
+
+      const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
+      localStorage.setItem("driftPerDay", driftPerDay);
+
+      const now = Date.now();
+      const elapsedMs = now - baseStart;
+      const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+      const driftMs = elapsedDays * driftPerDay * 60 * 1000;
+
+      const currentVirtualMs = baseStart + elapsedMs + driftMs;
+      const target = new Date(currentVirtualMs);
+      target.setHours(h, m); // seconds stay the same
+
+      correctionOffsetMs = target.getTime() - currentVirtualMs;
+      localStorage.setItem("correctionOffsetMs", correctionOffsetMs);
+    }
+
+    function requestNotificationPermission() {
+      Notification.requestPermission().then(result => {
+        if (result === "granted") {
+          alert("Notifications enabled.");
+        }
+      });
+    }
+
+    function sendNotification(message) {
+      if (Notification.permission === "granted") {
+        new Notification(message);
+      }
+    }
+
+    document.getElementById("notifyTime").addEventListener("change", () => {
+      localStorage.setItem("notifyTime", document.getElementById("notifyTime").value);
+    });
+
+    const startDelay = 1000 - (Date.now() % 1000);
+    setTimeout(() => {
+      updateTime();
+      setInterval(updateTime, 1000);
+    }, startDelay);
+  </script>
+</body>
+</html>
