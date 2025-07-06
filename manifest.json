@@ -1,6 +1,6 @@
 {
-  "name": "Virtual Clock",
-  "short_name": "Clock",
+  "name": "non24clock",
+  "short_name": "non24",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#111",
