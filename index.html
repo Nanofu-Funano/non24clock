@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="theme-color" content="#111">
   <style>
     body {
       font-family: sans-serif;
@@ -60,12 +64,20 @@
   </div>
 
   <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js').then(function(registration) {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }).catch(function(error) {
+        console.log('ServiceWorker registration failed:', error);
+      });
+    }
+
     const baseStart = new Date("2025-06-01T00:00:00+09:00").getTime();
     let correctionOffsetMs = parseFloat(localStorage.getItem("correctionOffsetMs")) || 0;
     document.getElementById("driftPerDay").value = localStorage.getItem("driftPerDay") || 30;
     document.getElementById("notifyTime").value = localStorage.getItem("notifyTime") || "";
 
-    let lastNotifiedMinute = null; // 通知済み記録
+    let lastNotifiedMinute = null;
 
     function updateTime() {
       const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
@@ -83,13 +95,11 @@
 
       document.getElementById("virtualTime").textContent = `${h}:${m}:${s}`;
 
-      // update cycle progress bar
       const cycleLengthMin = 1440 + driftPerDay;
       const minutesIntoDay = virtualDate.getHours() * 60 + virtualDate.getMinutes() + virtualDate.getSeconds() / 60;
       const cyclePercent = Math.min(100, (minutesIntoDay / cycleLengthMin) * 100);
       document.getElementById("cycleProgress").style.width = `${cyclePercent}%`;
 
-      // check for notification
       const notifyStr = document.getElementById("notifyTime").value;
       if (notifyStr) {
         const [nh, nm] = notifyStr.split(":" ).map(Number);
@@ -101,7 +111,7 @@
           lastNotifiedMinute = currentMinute;
         }
         if (currentMinute !== targetMinute) {
-          lastNotifiedMinute = null; // リセット
+          lastNotifiedMinute = null;
         }
       }
     }
@@ -121,7 +131,7 @@
 
       const currentVirtualMs = baseStart + elapsedMs + driftMs;
       const target = new Date(currentVirtualMs);
-      target.setHours(h, m); // seconds stay the same
+      target.setHours(h, m);
 
       correctionOffsetMs = target.getTime() - currentVirtualMs;
       localStorage.setItem("correctionOffsetMs", correctionOffsetMs);
