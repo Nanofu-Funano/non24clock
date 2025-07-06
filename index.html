@@ -8,12 +8,17 @@
   <meta name="theme-color" content="#111">
   <title>non24clock</title>
   <style>
-    body {
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
       font-family: sans-serif;
       text-align: center;
       background: #111;
       color: #fff;
-      padding: 2em;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     .time {
       font-size: 4em;
@@ -64,6 +69,8 @@
     </div>
   </div>
 
+  <audio id="alarmSound" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" preload="auto"></audio>
+
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js').then(function(registration) {
@@ -109,6 +116,7 @@
 
         if (currentMinute === targetMinute && lastNotifiedMinute !== currentMinute) {
           sendNotification(`Virtual time is now ${h}:${m}`);
+          document.getElementById("alarmSound").play().catch(e => console.log("Audio play error:", e));
           lastNotifiedMinute = currentMinute;
         }
         if (currentMinute !== targetMinute) {
