@@ -9,143 +9,215 @@
   <title>non24clock</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
+      margin: 0; padding: 0; height: 100%;
       font-family: sans-serif;
-      text-align: center;
-      background: #111;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
+      background: #111; color: #fff;
+      display: flex; flex-direction: column;
       justify-content: center;
+      text-align: center;
+    }
+    .container {
+      display: flex; flex-direction: column;
+      align-items: center; flex: 1 0 auto; justify-content: center;
+      height: 100vh;
+    }
+    .realtime {
+      font-size: 1.1em;
+      margin-bottom: 0.3em;
+      color: #aaa; opacity: 0.65;
+      letter-spacing: 0.03em;
     }
     .time {
-      font-size: 4em;
-      margin: 0.5em 0;
+      font-size: 5em; letter-spacing: 0.08em;
+      margin: 0.2em 0 0.18em 0;
     }
-    .controls {
-      margin-top: 2em;
+    .controls, label, input, button {
+      color: #aaa; opacity: 0.75; font-size: 1em;
     }
-    input {
-      font-size: 1em;
-      padding: 0.3em;
-      width: 6em;
+    .controls input, .controls button {
+      color: #ccc; background: #1a1a1a;
+      border: 1px solid #333; border-radius: 5px;
     }
     .progress-container {
       margin-top: 1em;
-      width: 80%;
-      height: 10px;
-      background: #444;
-      margin-left: auto;
-      margin-right: auto;
-      border-radius: 5px;
-      overflow: hidden;
+      width: 360px; max-width: 94vw;
+      height: 14px; background: #444;
+      margin-left: auto; margin-right: auto;
+      border-radius: 7px; overflow: visible; position: relative;
+      box-shadow: 0 2px 12px #0008;
     }
     .progress-bar {
-      height: 100%;
-      background: #0cf;
-      transition: width 0.2s linear;
+      height: 100%; background: #0cf;
+      transition: width 0.2s linear; border-radius: 7px 0 0 7px;
+    }
+    .notify-mark {
+      position: absolute; top: -14px; width: 0; height: 32px; left: 0; pointer-events: none;
+      z-index: 3;
+    }
+    .notify-dot, .notify-bell {
+      font-size: 14px;
+      width: 14px; height: 14px; line-height: 14px;
+      position: absolute; left: -7px;
+      text-align: center; color: #fff;
+      opacity: 0.95;
+      filter: drop-shadow(0 0 2px #222) drop-shadow(0 0 2px #fff8);
+      user-select: none;
+    }
+    .notify-dot { background: #fff; border-radius: 50%; border: 2px solid #eee; }
+    .notify-bell { background: none; }
+    @media (max-width: 420px) {
+      .progress-container { width: 97vw; min-width: 110px; }
+      .time { font-size: 2.5em; }
+      .realtime { font-size: 0.95em; }
+      .notify-dot, .notify-bell { font-size: 10px; width: 10px; height: 10px; left: -5px;}
+      .notify-mark { top: -9px; }
     }
   </style>
 </head>
 <body>
-  <div class="time" id="virtualTime">--:--:--</div>
-  <div class="progress-container">
-    <div class="progress-bar" id="cycleProgress" style="width: 0%;"></div>
+  <div class="container">
+    <div class="realtime" id="realTime">real: --:--:--</div>
+    <div class="time" id="virtualTime">--:--:--</div>
+    <div class="progress-container">
+      <div class="progress-bar" id="cycleProgress" style="width: 0%;"></div>
+      <div class="notify-mark" id="notifyMark"></div>
+    </div>
+    <div class="controls">
+      <div style="margin-top: 1.3em;">
+        <label>Drift per day (min): <input type="number" id="driftPerDay" style="width:5em;"></label>
+      </div>
+      <div style="margin-top: 1em;">
+        <label>Correction time (HH:MM): <input type="time" id="correctionTime"></label>
+        <button onclick="applyCorrection()">Apply</button>
+      </div>
+      <div style="margin-top: 1em;">
+        <label>Notify at (HH:MM): <input type="time" id="notifyTime"></label>
+        <button onclick="requestNotificationPermission()">Enable Notifications</button>
+      </div>
+    </div>
   </div>
-
-  <div class="controls">
-    <div>
-      <label>Drift per day (min): <input type="number" id="driftPerDay"></label>
-    </div>
-    <div style="margin-top: 1em;">
-      <label>Correction time (HH:MM): <input type="time" id="correctionTime"></label>
-      <button onclick="applyCorrection()">Apply</button>
-    </div>
-    <div style="margin-top: 1em;">
-      <label>Notify at (HH:MM): <input type="time" id="notifyTime"></label>
-      <button onclick="requestNotificationPermission()">Enable Notifications</button>
-    </div>
-  </div>
-
   <audio id="alarmSound" src="alarm.mp3" preload="auto"></audio>
-
   <script>
+    // PWA用サービスワーカー
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js').then(function(registration) {
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-      }).catch(function(error) {
-        console.log('ServiceWorker registration failed:', error);
-      });
+      navigator.serviceWorker.register('service-worker.js');
     }
-
+    // --- 設定・初期化 ---
     const baseStart = new Date("2025-06-01T00:00:00+09:00").getTime();
     let correctionOffsetMs = parseFloat(localStorage.getItem("correctionOffsetMs")) || 0;
     document.getElementById("driftPerDay").value = localStorage.getItem("driftPerDay") || 30;
     document.getElementById("notifyTime").value = localStorage.getItem("notifyTime") || "";
-
     let lastNotifiedMinute = null;
 
+    // --- 毎秒ドリフト反映・表示更新 ---
     function updateTime() {
       const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
-      const now = Date.now();
-      const elapsedMs = now - baseStart;
-      const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-      const driftMs = elapsedDays * driftPerDay * 60 * 1000;
+      // 仮想1日の長さ(ms)
+      const virtualDayMs = (24 * 60 + driftPerDay) * 60 * 1000;
+      const realDayMs = 24 * 60 * 60 * 1000;
+      // 経過実時間
+      const realElapsedMs = Date.now() - baseStart;
+      // ドリフト比率
+      const ratio = virtualDayMs / realDayMs;
+      // 仮想経過ms
+      const virtualElapsedMs = realElapsedMs * ratio;
+      const virtualMs = baseStart + virtualElapsedMs + correctionOffsetMs;
 
-      const virtualMs = baseStart + elapsedMs + driftMs + correctionOffsetMs;
-      const virtualDate = new Date(virtualMs);
+      // 仮想時刻（0:00:00超も正確に）
+      const secondsInVirtualDay = virtualDayMs / 1000;
+      let secondsToday = Math.floor((virtualMs - baseStart) / 1000) % secondsInVirtualDay;
+      if (secondsToday < 0) secondsToday += secondsInVirtualDay;
+      const vh = Math.floor(secondsToday / 3600);
+      const vm = Math.floor((secondsToday % 3600) / 60);
+      const vs = Math.floor(secondsToday % 60);
+      document.getElementById("virtualTime").textContent =
+        vh.toString().padStart(2, "0") + ":" +
+        vm.toString().padStart(2, "0") + ":" +
+        vs.toString().padStart(2, "0");
 
-      const h = virtualDate.getHours().toString().padStart(2, '0');
-      const m = virtualDate.getMinutes().toString().padStart(2, '0');
-      const s = virtualDate.getSeconds().toString().padStart(2, '0');
+      // 実時刻（ユーザーのタイムゾーン）
+      const realNow = new Date();
+      // タイムゾーン名・オフセット取得
+      const offsetMin = -realNow.getTimezoneOffset();
+      const sign = offsetMin >= 0 ? "+" : "-";
+      const tzH = String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, '0');
+      const tzM = String(Math.abs(offsetMin) % 60).padStart(2, '0');
+      // 曜日・月・日付・年
+      const y = realNow.getFullYear();
+      const mo = realNow.toLocaleString('en-US', { month: 'long' });
+      const d = String(realNow.getDate()).padStart(2, '0');
+      // フォーマット: 13:44:25 (GMT+09:00) December 11, 2025
+      document.getElementById("realTime").textContent =
+        `${realNow.getHours().toString().padStart(2, "0")}:` +
+        `${realNow.getMinutes().toString().padStart(2, "0")}:` +
+        `${realNow.getSeconds().toString().padStart(2, "0")} ` +
+        `(GMT${sign}${tzH}:${tzM}) ${mo} ${d}, ${y}`;
 
-      document.getElementById("virtualTime").textContent = `${h}:${m}:${s}`;
+      // プログレスバー
+      const percent = (secondsToday / secondsInVirtualDay) * 100;
+      document.getElementById("cycleProgress").style.width = `${percent}%`;
 
-      const cycleLengthMin = 1440 + driftPerDay;
-      const minutesIntoDay = virtualDate.getHours() * 60 + virtualDate.getMinutes() + virtualDate.getSeconds() / 60;
-      const cyclePercent = Math.min(100, (minutesIntoDay / cycleLengthMin) * 100);
-      document.getElementById("cycleProgress").style.width = `${cyclePercent}%`;
+      // 通知設定位置マーク
+      updateNotifyMark(driftPerDay, virtualDayMs);
 
+      // 通知・アラーム
       const notifyStr = document.getElementById("notifyTime").value;
       if (notifyStr) {
-        const [nh, nm] = notifyStr.split(":" ).map(Number);
-        const currentMinute = virtualDate.getHours() * 60 + virtualDate.getMinutes();
-        const targetMinute = nh * 60 + nm;
-
-        if (currentMinute === targetMinute && lastNotifiedMinute !== currentMinute) {
-          sendNotification(`Virtual time is now ${h}:${m}`);
-          document.getElementById("alarmSound").play().catch(e => console.log("Audio play error:", e));
-          lastNotifiedMinute = currentMinute;
+        const [nh, nm] = notifyStr.split(":").map(Number);
+        const notifySec = nh * 3600 + nm * 60;
+        if (Math.abs(secondsToday - notifySec) < 1 && lastNotifiedMinute !== notifySec) {
+          sendNotification(`Virtual time is now ${vh.toString().padStart(2, "0")}:${vm.toString().padStart(2, "0")}`);
+          document.getElementById("alarmSound").play().catch(e => {});
+          lastNotifiedMinute = notifySec;
         }
-        if (currentMinute !== targetMinute) {
+        if (Math.abs(secondsToday - notifySec) >= 1) {
           lastNotifiedMinute = null;
         }
       }
     }
 
+    // プログレスバーの通知位置に小🔔マーク
+    function updateNotifyMark(driftPerDay, virtualDayMs) {
+      const notifyStr = document.getElementById("notifyTime").value;
+      const mark = document.getElementById("notifyMark");
+      mark.innerHTML = ""; // 毎回リセット
+      if (!notifyStr) return;
+      const [nh, nm] = notifyStr.split(":").map(Number);
+      const notifySec = nh * 3600 + nm * 60;
+      const secondsInVirtualDay = virtualDayMs / 1000;
+      const percent = (notifySec / secondsInVirtualDay) * 100;
+      // 小さな🔔絵文字
+      const bell = document.createElement("span");
+      bell.className = "notify-bell";
+      bell.textContent = "🔔";
+      bell.style.left = `calc(${percent}% - 7px)`;
+      mark.appendChild(bell);
+    }
+
+    // 補正
     function applyCorrection() {
       const timeStr = document.getElementById("correctionTime").value;
       if (!timeStr) return;
-      const [h, m] = timeStr.split(":" ).map(Number);
-
+      const [h, m] = timeStr.split(":").map(Number);
       const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
       localStorage.setItem("driftPerDay", driftPerDay);
-
-      const now = Date.now();
-      const elapsedMs = now - baseStart;
-      const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-      const driftMs = elapsedDays * driftPerDay * 60 * 1000;
-
-      const currentVirtualMs = baseStart + elapsedMs + driftMs;
-      const target = new Date(currentVirtualMs);
-      target.setHours(h, m);
-
-      correctionOffsetMs = target.getTime() - currentVirtualMs;
+      const realElapsedMs = Date.now() - baseStart;
+      const virtualDayMs = (24 * 60 + driftPerDay) * 60 * 1000;
+      const realDayMs = 24 * 60 * 60 * 1000;
+      const ratio = virtualDayMs / realDayMs;
+      const virtualElapsedMs = realElapsedMs * ratio;
+      const currentVirtualMs = baseStart + virtualElapsedMs;
+      // 補正用: 秒はそのまま
+      const secondsInVirtualDay = virtualDayMs / 1000;
+      let secondsToday = Math.floor((currentVirtualMs - baseStart) / 1000) % secondsInVirtualDay;
+      if (secondsToday < 0) secondsToday += secondsInVirtualDay;
+      const newSec = h * 3600 + m * 60 + secondsToday % 60;
+      const targetVirtualMs = baseStart + Math.floor(currentVirtualMs / (virtualDayMs)) * virtualDayMs + newSec * 1000;
+      correctionOffsetMs = targetVirtualMs - currentVirtualMs;
       localStorage.setItem("correctionOffsetMs", correctionOffsetMs);
     }
 
+    // 通知許可
     function requestNotificationPermission() {
       Notification.requestPermission().then(result => {
         if (result === "granted") {
@@ -153,7 +225,6 @@
         }
       });
     }
-
     function sendNotification(message) {
       if (Notification.permission === "granted") {
         new Notification(message);
@@ -164,11 +235,8 @@
       localStorage.setItem("notifyTime", document.getElementById("notifyTime").value);
     });
 
-    const startDelay = 1000 - (Date.now() % 1000);
-    setTimeout(() => {
-      updateTime();
-      setInterval(updateTime, 1000);
-    }, startDelay);
+    setInterval(updateTime, 1000);
+    updateTime();
   </script>
 </body>
 </html>
