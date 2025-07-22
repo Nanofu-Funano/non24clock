@@ -20,19 +20,34 @@
       display: flex; flex-direction: column;
       align-items: center; flex: 1 0 auto; justify-content: center;
       height: 100vh;
+      position: relative;
     }
     .realtime {
-      font-size: 1.1em;
-      margin-bottom: 0.3em;
+      font-size: 1.08em;
+      margin-bottom: 0.28em;
       color: #aaa; opacity: 0.65;
       letter-spacing: 0.03em;
+      transition: opacity 0.2s;
     }
     .time {
       font-size: 5em; letter-spacing: 0.08em;
-      margin: 0.2em 0 0.18em 0;
+      margin: 0.12em 0 0.08em 0;
+      transition: font-size 0.2s;
+    }
+    .seconds {
+      font-size: 0.28em;
+      color: #aaa;
+      margin-left: 0.08em;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+      vertical-align: top;
+      position: relative;
+      top: -0.09em;
+      font-family: 'SFMono-Regular', 'Consolas', 'Menlo', monospace;
     }
     .controls, label, input, button {
       color: #aaa; opacity: 0.75; font-size: 1em;
+      transition: opacity 0.2s;
     }
     .controls input, .controls button {
       color: #ccc; background: #1a1a1a;
@@ -45,138 +60,239 @@
       margin-left: auto; margin-right: auto;
       border-radius: 7px; overflow: visible; position: relative;
       box-shadow: 0 2px 12px #0008;
+      transition: width 0.2s;
     }
     .progress-bar {
       height: 100%; background: #0cf;
       transition: width 0.2s linear; border-radius: 7px 0 0 7px;
     }
     .notify-mark {
-      position: absolute; top: -14px; width: 0; height: 32px; left: 0; pointer-events: none;
+      position: absolute; top: -22px; width: 0; height: 34px; left: 0; pointer-events: none;
       z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .notify-dot, .notify-bell {
-      font-size: 14px;
-      width: 14px; height: 14px; line-height: 14px;
-      position: absolute; left: -7px;
-      text-align: center; color: #fff;
-      opacity: 0.95;
-      filter: drop-shadow(0 0 2px #222) drop-shadow(0 0 2px #fff8);
+    .notify-img {
+      width: 16px; height: 16px;
+      position: absolute;
+      left: -8px; top: 2px;
+      opacity: 0.93;
+      filter: drop-shadow(0 0 2px #fff6) drop-shadow(0 0 2px #222);
       user-select: none;
+      pointer-events: none;
     }
-    .notify-dot { background: #fff; border-radius: 50%; border: 2px solid #eee; }
-    .notify-bell { background: none; }
-    @media (max-width: 420px) {
+    .settings-btn {
+      position: fixed; right: 2vw; bottom: 2vw;
+      background: rgba(60,60,60,0.5); color: #aaa;
+      font-size: 2.1em; border: none; border-radius: 20px;
+      width: 48px; height: 48px;
+      box-shadow: 0 2px 10px #000a;
+      cursor: pointer; outline: none;
+      transition: background 0.2s, color 0.2s;
+      z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .settings-btn:active, .settings-btn:hover {
+      background: #222; color: #fff;
+    }
+    .settings-panel {
+      margin-top: 2.5em;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-width: 260px;
+      max-width: 98vw;
+      margin-left: auto;
+      margin-right: auto;
+      transition: opacity 0.2s;
+    }
+    .settings-panel.visible { display: flex; }
+    .explanation {
+      margin: 2.1em 0 0.5em 0;
+      font-size: 0.92em;
+      color: #888; opacity: 0.72;
+      line-height: 1.7;
+      max-width: 460px;
+      text-align: left;
+      margin-left: auto; margin-right: auto;
+      border-top: 1px solid #222;
+      padding-top: 1em;
+    }
+    .explanation a {
+      color: #aac;
+      text-decoration: underline dotted;
+      transition: color 0.15s;
+    }
+    @media (max-width: 430px) {
       .progress-container { width: 97vw; min-width: 110px; }
-      .time { font-size: 2.5em; }
-      .realtime { font-size: 0.95em; }
-      .notify-dot, .notify-bell { font-size: 10px; width: 10px; height: 10px; left: -5px;}
-      .notify-mark { top: -9px; }
+      .time { font-size: 2.6em; }
+      .realtime { font-size: 0.96em; }
+      .notify-img { width: 12px; height: 12px; left: -6px; top: 2px; }
+      .notify-mark { top: -13px; }
+      .settings-panel { min-width: 110px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="realtime" id="realTime">real: --:--:--</div>
-    <div class="time" id="virtualTime">--:--:--</div>
+    <div class="realtime" id="realTime" style="display:none;">--:--:--</div>
+    <div class="time" id="virtualTime">--:--</div>
     <div class="progress-container">
       <div class="progress-bar" id="cycleProgress" style="width: 0%;"></div>
       <div class="notify-mark" id="notifyMark"></div>
     </div>
-    <div class="controls">
-      <div style="margin-top: 1.3em;">
-        <label>Drift per day (min): <input type="number" id="driftPerDay" style="width:5em;"></label>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="realtime" id="realTimeSettings">--:--:--</div>
+      <div class="time" style="font-size:2.1em;margin-bottom:0.6em;">
+        <span id="virtualTimeSettings">--:--</span>
+        <span class="seconds" id="virtualSeconds">:--</span>
       </div>
-      <div style="margin-top: 1em;">
-        <label>Correction time (HH:MM): <input type="time" id="correctionTime"></label>
-        <button onclick="applyCorrection()">Apply</button>
+      <div class="controls">
+        <div style="margin-top: 1.3em;">
+          <label>Drift per day (min): <input type="number" id="driftPerDay" style="width:5em;"></label>
+        </div>
+        <div style="margin-top: 1em;">
+          <label>Correction time (HH:MM): <input type="time" id="correctionTime"></label>
+          <button onclick="applyCorrection()">Apply</button>
+        </div>
+        <div style="margin-top: 1em;">
+          <label>Notify at (HH:MM): <input type="time" id="notifyTime"></label>
+          <button onclick="requestNotificationPermission()">Enable Notifications</button>
+        </div>
       </div>
-      <div style="margin-top: 1em;">
-        <label>Notify at (HH:MM): <input type="time" id="notifyTime"></label>
-        <button onclick="requestNotificationPermission()">Enable Notifications</button>
+      <div class="explanation">
+        This is a clock that shifts by a specified number of minutes each day.<br>
+        For example, if you set "Drift per day" to 30 minutes, then 24 hours on this clock will correspond to 24 hours and 30 minutes in real time.<br>
+        This is useful for people living on cycles longer or shorter than 24 hours—you can wake up at 7:00 or have lunch at 12:00 according to your own rhythm.<br>
+        You can also install this as an app.<br>
+        All settings are saved in your browser cache.<br>
+        <br>
+        ※ This app was created using ChatGPT.<br>
+        <br>
+        by <a href="https://bsky.app/profile/nanofu.bsky.social" target="_blank">Nanofu</a>
       </div>
     </div>
+    <button class="settings-btn" id="settingsToggle" aria-label="Open settings" title="Open settings">⋯</button>
   </div>
   <audio id="alarmSound" src="alarm.mp3" preload="auto"></audio>
   <script>
-    // PWA用サービスワーカー
+    // サービスワーカー登録
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js');
     }
-    // --- 設定・初期化 ---
+
+    // 設定・初期化
     const baseStart = new Date("2025-06-01T00:00:00+09:00").getTime();
     let correctionOffsetMs = parseFloat(localStorage.getItem("correctionOffsetMs")) || 0;
     document.getElementById("driftPerDay").value = localStorage.getItem("driftPerDay") || 30;
     document.getElementById("notifyTime").value = localStorage.getItem("notifyTime") || "";
     let lastNotifiedMinute = null;
+    let settingsOpen = false;
 
-    // --- 毎秒ドリフト反映・表示更新 ---
-    function updateTime() {
+    // UI切り替え（設定パネルの表示/非表示）
+    function updateSettingsUI() {
+      const panel = document.getElementById("settingsPanel");
+      const realSmall = document.getElementById("realTime");
+      const realSettings = document.getElementById("realTimeSettings");
+      const virtualSettings = document.getElementById("virtualTimeSettings");
+      const virtualSec = document.getElementById("virtualSeconds");
+      if (settingsOpen) {
+        panel.classList.add("visible");
+        realSmall.style.display = "none";
+        // 設定モードの初回表示も更新
+        updateTime(true);
+      } else {
+        panel.classList.remove("visible");
+        realSmall.style.display = "";
+      }
+    }
+    document.getElementById("settingsToggle").onclick = function() {
+      settingsOpen = !settingsOpen;
+      updateSettingsUI();
+    };
+
+    // メイン表示更新（通常モード／設定モード）
+    function updateTime(forceSettings=false) {
       const driftPerDay = parseFloat(document.getElementById("driftPerDay").value || 0);
-      // 仮想1日の長さ(ms)
       const virtualDayMs = (24 * 60 + driftPerDay) * 60 * 1000;
       const realDayMs = 24 * 60 * 60 * 1000;
-      // 経過実時間
       const realElapsedMs = Date.now() - baseStart;
-      // ドリフト比率
       const ratio = virtualDayMs / realDayMs;
-      // 仮想経過ms
       const virtualElapsedMs = realElapsedMs * ratio;
       const virtualMs = baseStart + virtualElapsedMs + correctionOffsetMs;
-
-      // 仮想時刻（0:00:00超も正確に）
       const secondsInVirtualDay = virtualDayMs / 1000;
       let secondsToday = Math.floor((virtualMs - baseStart) / 1000) % secondsInVirtualDay;
       if (secondsToday < 0) secondsToday += secondsInVirtualDay;
       const vh = Math.floor(secondsToday / 3600);
       const vm = Math.floor((secondsToday % 3600) / 60);
       const vs = Math.floor(secondsToday % 60);
-      document.getElementById("virtualTime").textContent =
-        vh.toString().padStart(2, "0") + ":" +
-        vm.toString().padStart(2, "0") + ":" +
-        vs.toString().padStart(2, "0");
 
-      // 実時刻（ユーザーのタイムゾーン）
+      // 実時刻情報
       const realNow = new Date();
-      // タイムゾーン名・オフセット取得
       const offsetMin = -realNow.getTimezoneOffset();
       const sign = offsetMin >= 0 ? "+" : "-";
       const tzH = String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, '0');
       const tzM = String(Math.abs(offsetMin) % 60).padStart(2, '0');
-      // 曜日・月・日付・年
       const y = realNow.getFullYear();
       const mo = realNow.toLocaleString('en-US', { month: 'long' });
       const d = String(realNow.getDate()).padStart(2, '0');
-      // フォーマット: 13:44:25 (GMT+09:00) December 11, 2025
-      document.getElementById("realTime").textContent =
+      const realFormatted =
         `${realNow.getHours().toString().padStart(2, "0")}:` +
         `${realNow.getMinutes().toString().padStart(2, "0")}:` +
         `${realNow.getSeconds().toString().padStart(2, "0")} ` +
         `(GMT${sign}${tzH}:${tzM}) ${mo} ${d}, ${y}`;
 
+      // 通常表示
+      document.getElementById("virtualTime").innerHTML =
+        vh.toString().padStart(2, "0") + ":" + vm.toString().padStart(2, "0");
+      // 設定表示モード
+      document.getElementById("virtualTimeSettings").textContent =
+        vh.toString().padStart(2, "0") + ":" + vm.toString().padStart(2, "0");
+      document.getElementById("virtualSeconds").textContent =
+        ":" + vs.toString().padStart(2, "0");
+      document.getElementById("realTimeSettings").textContent = realFormatted;
+
+      // 通常モードの実時刻（非表示時はdisplay:none）
+      document.getElementById("realTime").textContent = realFormatted;
+
       // プログレスバー
       const percent = (secondsToday / secondsInVirtualDay) * 100;
       document.getElementById("cycleProgress").style.width = `${percent}%`;
 
-      // 通知設定位置マーク
+      // 通知マーク
       updateNotifyMark(driftPerDay, virtualDayMs);
 
-      // 通知・アラーム
+      // 通知（繰り返し対応、1サイクル1回のみ）
       const notifyStr = document.getElementById("notifyTime").value;
       if (notifyStr) {
         const [nh, nm] = notifyStr.split(":").map(Number);
         const notifySec = nh * 3600 + nm * 60;
-        if (Math.abs(secondsToday - notifySec) < 1 && lastNotifiedMinute !== notifySec) {
-          sendNotification(`Virtual time is now ${vh.toString().padStart(2, "0")}:${vm.toString().padStart(2, "0")}`);
+        const epsilon = 1; // 1秒範囲でOK
+        // サイクルをまたいだ時も正常動作
+        if (
+          (Math.abs(secondsToday - notifySec) < epsilon ||
+          Math.abs(secondsToday + secondsInVirtualDay - notifySec) < epsilon) &&
+          lastNotifiedMinute !== notifySec
+        ) {
+          sendNotification(
+            `Virtual time is now ${vh.toString().padStart(2, "0")}:${vm.toString().padStart(2, "0")}`
+          );
           document.getElementById("alarmSound").play().catch(e => {});
           lastNotifiedMinute = notifySec;
         }
-        if (Math.abs(secondsToday - notifySec) >= 1) {
+        // サイクルが進んだ場合リセット
+        if (
+          Math.abs(secondsToday - notifySec) >= epsilon &&
+          Math.abs(secondsToday + secondsInVirtualDay - notifySec) >= epsilon
+        ) {
           lastNotifiedMinute = null;
         }
       }
     }
 
-    // プログレスバーの通知位置に小🔔マーク
+    // 通知アイコンをプログレスバーに
     function updateNotifyMark(driftPerDay, virtualDayMs) {
       const notifyStr = document.getElementById("notifyTime").value;
       const mark = document.getElementById("notifyMark");
@@ -186,13 +302,22 @@
       const notifySec = nh * 3600 + nm * 60;
       const secondsInVirtualDay = virtualDayMs / 1000;
       const percent = (notifySec / secondsInVirtualDay) * 100;
-      // 小さな🔔絵文字
-      const bell = document.createElement("span");
-      bell.className = "notify-bell";
-      bell.textContent = "🔔";
-      bell.style.left = `calc(${percent}% - 7px)`;
+      // bell.png（16x16など）を小さく重ねる
+      const bell = document.createElement("img");
+      bell.className = "notify-img";
+      bell.src = "bell.png";
+      bell.alt = "bell";
+      bell.style.left = `calc(${percent}% - 8px)`;
       mark.appendChild(bell);
     }
+
+    // Driftなどの設定値保存
+    document.getElementById("driftPerDay").addEventListener("input", () => {
+      localStorage.setItem("driftPerDay", document.getElementById("driftPerDay").value);
+    });
+    document.getElementById("notifyTime").addEventListener("change", () => {
+      localStorage.setItem("notifyTime", document.getElementById("notifyTime").value);
+    });
 
     // 補正
     function applyCorrection() {
@@ -207,7 +332,6 @@
       const ratio = virtualDayMs / realDayMs;
       const virtualElapsedMs = realElapsedMs * ratio;
       const currentVirtualMs = baseStart + virtualElapsedMs;
-      // 補正用: 秒はそのまま
       const secondsInVirtualDay = virtualDayMs / 1000;
       let secondsToday = Math.floor((currentVirtualMs - baseStart) / 1000) % secondsInVirtualDay;
       if (secondsToday < 0) secondsToday += secondsInVirtualDay;
@@ -231,12 +355,16 @@
       }
     }
 
-    document.getElementById("notifyTime").addEventListener("change", () => {
-      localStorage.setItem("notifyTime", document.getElementById("notifyTime").value);
-    });
+    // 初期UI調整
+    updateSettingsUI();
 
-    setInterval(updateTime, 1000);
+    // 1秒ごとに表示更新
+    setInterval(() => {
+      updateTime();
+      if (settingsOpen) updateTime(true);
+    }, 1000);
     updateTime();
+
   </script>
 </body>
 </html>
